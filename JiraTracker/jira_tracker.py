@@ -19,10 +19,10 @@ from openpyxl.utils import get_column_letter
 #  CONFIG — Fill in your details here
 # ─────────────────────────────────────────────
 JIRA_CONFIG = {
-    "base_url":  "https://halobrandedsolutions.atlassian.net",   # e.g. https://mycompany.atlassian.net
-    "email":     "himanshu.patidar@halo.com",               # Your Jira login email
-    "api_token": "ATATT3xFfGF0KZ91Zu-4bP4a8BBtwZPM-LVeX4uHFY9-selrhu8AcaXTOgAz5FSnRxa66zHMyZ1PXlZ5ULxl3TBTYh6vuQAHSqRhK1RAdTb5wONLDJv7gH07cO7XoZCf9Bi7XxxawCSs6OYyHCQIo-i-ShjAjADoKxP9lLcSGfVFAC7njAIfmlk=8766301F",                  # https://id.atlassian.com/manage-profile/security/api-tokens
-    "project":   "TSTD",                                 # Your Jira project key e.g. DEV, PROJ
+    "base_url":  "",   # e.g. https://mycompany.atlassian.net
+    "email":     "",               # Your Jira login email
+    "api_token": "",                  # https://id.atlassian.com/manage-profile/security/api-tokens
+    "project":   "",                                 # Your Jira project key e.g. DEV, PROJ
 }
 
 OUTPUT_FILE = "jira_status_log.xlsx"
