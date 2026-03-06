@@ -15,9 +15,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-# ─────────────────────────────────────────────
 #  CONFIG — Fill in your details here
-# ─────────────────────────────────────────────
 JIRA_CONFIG = {
     "base_url":  "",   # e.g. https://mycompany.atlassian.net
     "email":     "",               # Your Jira login email
@@ -28,9 +26,8 @@ JIRA_CONFIG = {
 OUTPUT_FILE = "jira_status_log.xlsx"
 STATE_FILE  = "jira_state.json"
 
-# ─────────────────────────────────────────────
+
 #  JIRA API
-# ─────────────────────────────────────────────
 def auth():
     cfg = JIRA_CONFIG
     return HTTPBasicAuth(cfg["email"], cfg["api_token"])
@@ -84,9 +81,8 @@ def extract_comment_text(body):
                 text_parts.append(inline.get("text", ""))
     return " ".join(text_parts).strip()
 
-# ─────────────────────────────────────────────
+
 #  ASSIGNMENT WINDOWS
-# ─────────────────────────────────────────────
 def get_my_assignment_windows(changelog, my_account_id):
     windows     = []
     assigned_at = None
@@ -114,9 +110,8 @@ def was_assigned_to_me(timestamp, windows):
                 return True
     return False
 
-# ─────────────────────────────────────────────
+
 #  STATE
-# ─────────────────────────────────────────────
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as f:
@@ -127,9 +122,9 @@ def save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
-# ─────────────────────────────────────────────
+
 #  EXCEL
-# ─────────────────────────────────────────────
+
 HEADERS = ["Ticket", "Summary", "Activity", "Old Status", "New Status", "Comment", "Updated By", "Done At", "Priority"]
 
 STATUS_COLORS = {
@@ -192,9 +187,8 @@ def append_row(ws, row_data, color_key="default"):
         cell.border    = border
     ws.row_dimensions[next_row].height = 20
 
-# ─────────────────────────────────────────────
+
 #  MAIN SYNC
-# ─────────────────────────────────────────────
 def sync():
     now        = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sheet_name = get_month_sheet_name()
