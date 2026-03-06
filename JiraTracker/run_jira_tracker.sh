@@ -5,7 +5,7 @@
 # ─────────────────────────────────────────────
 
 # Update this path to where you saved this project
-cd /home/himanshu.patidar/Desktop/JiraTracker_Linux/JiraTracker
+cd /home/{path}/JiraTracker
 
 # Run the script
 python3 jira_tracker.py
