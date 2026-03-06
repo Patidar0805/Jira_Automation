@@ -21,6 +21,7 @@ JIRA_CONFIG = {
     "email":     "",               # Your Jira login email
     "api_token": "",                  # https://id.atlassian.com/manage-profile/security/api-tokens
     "project":   "",                                 # Your Jira project key e.g. DEV, PROJ
+    # for multiple projects ->  "projects":  ["DEV", "QA"],   # ← add all your project keys here
 }
 
 OUTPUT_FILE = "jira_status_log.xlsx"
