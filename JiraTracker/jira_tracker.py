@@ -42,6 +42,8 @@ def get_my_account_id():
 def fetch_my_issues(account_id):
     url = f"{JIRA_CONFIG['base_url']}/rest/api/3/search/jql"
     jql = f"project = {JIRA_CONFIG['project']} AND assignee = \"{account_id}\" ORDER BY updated DESC"
+    # for multiple projects -> projects_jql = ", ".join(JIRA_CONFIG["projects"])
+    #                       -> jql = f"project in ({projects_jql}) AND assignee = \"{account_id}\" ORDER BY updated DESC"
     params = {
         "jql": jql,
         "fields": "summary,status,assignee,priority,comment",
