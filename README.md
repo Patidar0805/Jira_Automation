@@ -139,4 +139,4 @@ jira_status_log.xlsx
 
 ## 📄 License
 
-MIT License — free to use and modify.
+free to use and modify.
