@@ -15,20 +15,17 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+# ─────────────────────────────────────────────
 #  CONFIG — Fill in your details here
+# ─────────────────────────────────────────────
 JIRA_CONFIG = {
     "base_url":  "",   # e.g. https://mycompany.atlassian.net
     "email":     "",               # Your Jira login email
     "api_token": "",                  # https://id.atlassian.com/manage-profile/security/api-tokens
-    "project":   "",                                 # Your Jira project key e.g. DEV, PROJ
-    # for multiple projects ->  "projects":  ["DEV", "QA"],   # ← add all your project keys here
-}
-
-OUTPUT_FILE = "jira_status_log.xlsx"
-STATE_FILE  = "jira_state.json"
-
-
+    "projects":   [],                            
+# ─────────────────────────────────────────────
 #  JIRA API
+# ─────────────────────────────────────────────
 def auth():
     cfg = JIRA_CONFIG
     return HTTPBasicAuth(cfg["email"], cfg["api_token"])
@@ -41,9 +38,8 @@ def get_my_account_id():
 
 def fetch_my_issues(account_id):
     url = f"{JIRA_CONFIG['base_url']}/rest/api/3/search/jql"
-    jql = f"project = {JIRA_CONFIG['project']} AND assignee = \"{account_id}\" ORDER BY updated DESC"
-    # for multiple projects -> projects_jql = ", ".join(JIRA_CONFIG["projects"])
-    #                       -> jql = f"project in ({projects_jql}) AND assignee = \"{account_id}\" ORDER BY updated DESC"
+    projects_jql = ", ".join(JIRA_CONFIG["projects"])
+    jql = f"project in ({projects_jql}) AND assignee = \"{account_id}\" ORDER BY updated DESC"
     params = {
         "jql": jql,
         "fields": "summary,status,assignee,priority,comment",
@@ -84,8 +80,9 @@ def extract_comment_text(body):
                 text_parts.append(inline.get("text", ""))
     return " ".join(text_parts).strip()
 
-
+# ─────────────────────────────────────────────
 #  ASSIGNMENT WINDOWS
+# ─────────────────────────────────────────────
 def get_my_assignment_windows(changelog, my_account_id):
     windows     = []
     assigned_at = None
@@ -113,8 +110,9 @@ def was_assigned_to_me(timestamp, windows):
                 return True
     return False
 
-
+# ─────────────────────────────────────────────
 #  STATE
+# ─────────────────────────────────────────────
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as f:
@@ -125,23 +123,23 @@ def save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
-
+# ─────────────────────────────────────────────
 #  EXCEL
-
+# ─────────────────────────────────────────────
 HEADERS = ["Ticket", "Summary", "Activity", "Old Status", "New Status", "Comment", "Updated By", "Done At", "Priority"]
 
 STATUS_COLORS = {
-    "To Do":          "D0E8FF",
-    "In Progress":    "FFF4CC",
-    "In Development": "FFE8B0",
-    "Code Review":    "FFD6CC",
-    "In Review":      "FFD6CC",
-    "Done":           "D4EDDA",
-    "Closed":         "C8E6C9",
-    "Blocked":        "FFD6D6",
-    "comment":        "F0F0F0",
-    "assigned":       "E8D5F5",   # ★ purple for ticket assigned to me
-    "default":        "FFFFFF",
+    "To Do":          "4A90D9",  # Bold Blue
+    "In Progress":    "F5A623",  # Bold Orange
+    "In Development": "E67E22",  # Dark Orange
+    "Code Review":    "8E44AD",  # Bold Purple
+    "In Review":      "9B59B6",  # Medium Purple
+    "Done":           "27AE60",  # Bold Green
+    "Closed":         "1E8449",  # Dark Green
+    "Blocked":        "E74C3C",  # Bold Red
+    "comment":        "95A5A6",  # Medium Grey
+    "assigned":       "2980B9",  # Strong Blue
+    "default":        "FFFFFF",  # White
 }
 
 def get_month_sheet_name():
@@ -167,6 +165,100 @@ def get_or_create_month_sheet(wb, sheet_name):
     style_header_row(ws)
     return ws
 
+def sort_sheet(ws):
+    """Sort all data rows by Ticket (col 1) then Done At (col 8)."""
+    data = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if any(cell is not None for cell in row):
+            data.append(list(row))
+
+    # Sort by ticket number then by date
+    data.sort(key=lambda x: (str(x[0] or ""), str(x[7] or "")), reverse=True)
+
+    # Clear existing data rows
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.value = None
+
+    # Rewrite sorted rows with formatting
+    for i, row_data in enumerate(data, start=2):
+        color_key = "default"
+        activity = row_data[2] or ""
+        new_status = row_data[4] or ""
+        if "Assigned" in activity:
+            color_key = "assigned"
+        elif "Comment" in activity:
+            color_key = "comment"
+        else:
+            color_key = new_status
+
+        fill_clr = STATUS_COLORS.get(color_key, STATUS_COLORS["default"])
+        row_fill = PatternFill("solid", start_color=fill_clr)
+        border   = Border(
+            bottom=Side(style="thin", color="DDDDDD"),
+            right=Side(style="thin",  color="DDDDDD")
+        )
+        for col, value in enumerate(row_data, start=1):
+            cell = ws.cell(row=i, column=col, value=value)
+            cell.font      = Font(name="Arial", size=10)
+            cell.fill      = row_fill
+            cell.alignment = Alignment(vertical="center", wrap_text=(col == 6))
+            cell.border    = border
+        ws.row_dimensions[i].height = 20
+
+def update_run_log(wb, total_logged, log_entries):
+    """Maintain a 'Run Logs' sheet with every script execution."""
+    log_sheet_name = "Run Logs"
+    if log_sheet_name in wb.sheetnames:
+        wl = wb[log_sheet_name]
+    else:
+        wl = wb.create_sheet(title=log_sheet_name)
+        # Header row
+        log_headers = ["Run Date", "Run Time", "Tickets Found", "Total Changes", "Activity Log"]
+        hfill = PatternFill("solid", start_color="1F4E79")
+        hfont = Font(bold=True, color="FFFFFF", name="Arial", size=11)
+        col_widths = [16, 12, 16, 16, 80]
+        for i, (h, w) in enumerate(zip(log_headers, col_widths), start=1):
+            cell = wl.cell(row=1, column=i, value=h)
+            cell.font      = hfont
+            cell.fill      = hfill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            wl.column_dimensions[get_column_letter(i)].width = w
+        wl.row_dimensions[1].height = 24
+        wl.freeze_panes = "A2"
+
+    now        = datetime.now()
+    run_date   = now.strftime("%Y-%m-%d")
+    run_time   = now.strftime("%H:%M:%S")
+    tickets    = len(set(e.split(":")[0] for e in log_entries)) if log_entries else 0
+    # Build activity log — each change on a new line inside the cell
+    if log_entries:
+        activity_text = "\n".join(log_entries)
+    else:
+        activity_text = "No new activity found."
+
+    next_row = wl.max_row + 1
+    # Alternate row background for readability
+    bg_color = "F5F5F5" if next_row % 2 == 0 else "FFFFFF"
+    row_fill = PatternFill("solid", start_color=bg_color)
+    border   = Border(
+        bottom=Side(style="thin", color="DDDDDD"),
+        right=Side(style="thin",  color="DDDDDD")
+    )
+
+    row_data = [run_date, run_time, tickets, total_logged, activity_text]
+    for col, value in enumerate(row_data, start=1):
+        cell = wl.cell(row=next_row, column=col, value=value)
+        cell.font      = Font(name="Arial", size=10)
+        cell.fill      = row_fill
+        cell.alignment = Alignment(vertical="top", wrap_text=(col == 5))
+        cell.border    = border
+
+    # Row height based on number of log lines
+    line_count = len(log_entries) if log_entries else 1
+    wl.row_dimensions[next_row].height = max(20, line_count * 15)
+
+
 def load_or_create_workbook():
     if os.path.exists(OUTPUT_FILE):
         return load_workbook(OUTPUT_FILE)
@@ -184,14 +276,20 @@ def append_row(ws, row_data, color_key="default"):
     )
     for col, value in enumerate(row_data, start=1):
         cell = ws.cell(row=next_row, column=col, value=value)
-        cell.font      = Font(name="Arial", size=10)
+        dark_bg = ["4A90D9", "F5A623", "E67E22", "8E44AD", "9B59B6",
+           "27AE60", "1E8449", "E74C3C", "95A5A6", "2980B9"]
+        font_color = "FFFFFF" if fill_clr in dark_bg else "000000"
+        cell.font = Font(name="Arial", size=10, color=font_color, bold=(col == 1))
         cell.fill      = row_fill
         cell.alignment = Alignment(vertical="center", wrap_text=(col == 6))
         cell.border    = border
     ws.row_dimensions[next_row].height = 20
 
 
+
+# ─────────────────────────────────────────────
 #  MAIN SYNC
+# ─────────────────────────────────────────────
 def sync():
     now        = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sheet_name = get_month_sheet_name()
@@ -203,6 +301,7 @@ def sync():
     my_id        = get_my_account_id()
     issues       = fetch_my_issues(my_id)
     total_logged = 0
+    log_entries  = []
 
     print(f"  Found {len(issues)} ticket(s) assigned to you.")
 
@@ -264,6 +363,7 @@ def sync():
                     logged_ids.add(entry_id)
                     total_logged += 1
                     print(f"  ✓ {key}: assigned to me by {updated_by} at {done_at} (status: {status_at_assignment})")
+                    log_entries.append(f"👤 {key}: Assigned by {updated_by} | Status: {status_at_assignment} | At: {done_at}")
 
                 # ★ Log status changes while assigned to me
                 elif item["field"] == "status" and was_assigned_to_me(timestamp, windows):
@@ -283,6 +383,7 @@ def sync():
                     logged_ids.add(entry_id)
                     total_logged += 1
                     print(f"  ✓ {key}: {old_status} → {new_status} by {updated_by} at {done_at}")
+                    log_entries.append(f"🔄 {key}: {old_status} → {new_status} by {updated_by} | At: {done_at}")
 
         # ── COMMENTS ────────────────────────────────
         comments = fetch_comments(key)
@@ -316,19 +417,27 @@ def sync():
             logged_ids.add(comment_id)
             total_logged += 1
             print(f"  ✓ {key}: comment by {updated_by} at {done_at}")
+            log_entries.append(f"💬 {key}: Comment by {updated_by} | At: {done_at}")
 
         if key not in state:
             state[key] = {}
         state[key]["logged_ids"] = list(logged_ids)
+  
 
     sheet_is_new = ws.max_row == 1
     if total_logged:
+        sort_sheet(ws)
+        update_run_log(wb, total_logged, log_entries)
         wb.save(OUTPUT_FILE)
         print(f"\n  → Saved {total_logged} new entries to '{OUTPUT_FILE}' → sheet '{sheet_name}'")
     elif sheet_is_new:
+        sort_sheet(ws)
+        update_run_log(wb, total_logged, log_entries)
         wb.save(OUTPUT_FILE)
         print(f"\n  → No activity found. Empty sheet '{sheet_name}' created in '{OUTPUT_FILE}'")
     else:
+        update_run_log(wb, total_logged, log_entries)
+        wb.save(OUTPUT_FILE)
         print("\n  → No new activity found.")
 
     save_state(state)
